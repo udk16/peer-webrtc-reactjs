@@ -4,7 +4,7 @@ import Peer from 'peerjs';
 import { useEffect, useRef, useState } from 'react';
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");
+const socket = io("http://50.35.225.9:5000");
 
 function App() {
 
@@ -14,20 +14,30 @@ function App() {
   const [conn, setConn] = useState(null);
   const [remoteId, setRemoteId] = useState('');
   const [roomID, setRoomID] = useState('54378');
+  //to make visbile or hide the call button
+  const [endCallButton, setEndCallButton] = useState(false);
   //client name
   const [clientName, setClientName] = useState('agent');
   //let { current: con } = useRef();
   const [con, setCon] = useState({});
-
-  //video elements
-
-
+  //local stream
   const [lclstream, setLclstream] = useState();
+  //remote stream
   const [remoteStream, setRemoteStream] = useState();
   //localstream set
   let { current: RTCLoaclStream } = useRef(null);
-  //const peerRef=useRef(peer)
+  //call variable
+  const [callVr, setCallVr] = useState();
 
+  useEffect(() => {
+    console.log(" stream,remote", remoteStream)
+    if (remoteStream === undefined) {
+      const localVideoElement = document.querySelector("video#localVideo")
+      localVideoElement.srcObject = null;
+      const remoteVideoElement = document.querySelector("video#remoteVideo");
+      remoteVideoElement.srcObject = null;
+    }
+  }, [remoteStream]);
 
   useEffect(() => {
 
@@ -35,7 +45,7 @@ function App() {
     socket.on("connect", () => {
       console.log(socket.id); // x8WIv7-mJelg7on_ALbx
     });
-    
+
     //getting all clientsid present in the room , we are filtering the ids
     socket.on('peersData', (data) => {
       for (const key in data) {
@@ -92,11 +102,14 @@ function App() {
 
     //when we get call
     peer.on('call', (call) => {
+      //set callVr 
+      setCallVr(call);
       console.log("*** remote peer calling ", call);
       // Answer the call, providing our mediaStream
       const mediaStrm = navigator.mediaDevices.getUserMedia({ audio: true, video: true });
 
       mediaStrm.then((stream) => {
+
         call.answer(stream);
         console.log("Local stream inside peer.on(call) ", stream);
         const localVideoElement = document.querySelector("video#localVideo");
@@ -106,11 +119,40 @@ function App() {
       //when we get remotestream
       call.on('stream', (rmtstream) => {
         console.log("**** remoteStream ", rmtstream);
+        setRemoteStream(rmtstream)
         const remoteVideoElement = document.querySelector("video#remoteVideo");
         remoteVideoElement.srcObject = rmtstream;
+        //visible the end call button
+        setEndCallButton(true);
+      })
 
+      //Emitted when either you or the remote peer closes the media connection.
+      call.on('close', () => {
+        console.log("remote stream closed")
+        const localVideoElement = document.querySelector("video#localVideo")
+        localVideoElement.srcObject = null;
+        const remoteVideoElement = document.querySelector("video#remoteVideo");
+        remoteVideoElement.srcObject = null;
       })
     });
+
+    //peer connection close
+    peer.on('close', async () => {
+      //peer.close()
+      console.log("peer disconnected")
+      //setRemoteStream()
+      //setLclstream()
+      const mediaStrm = navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+
+      const localVideoElement = document.querySelector("video#localVideo")
+      localVideoElement.srcObject = null;
+      const remoteVideoElement = document.querySelector("video#remoteVideo");
+      remoteVideoElement.srcObject = null;
+    });
+
+    peer.on("disconnected", () => {
+      console.log("disconnected ")
+    })
 
   }, [])
   //if remoteid is set them makecall button will be visible
@@ -126,6 +168,8 @@ function App() {
       console.log("makecall button not visible")
     }
   }, [remoteId])
+
+
   //message exchange
   const dataChannel = (remoteId) => {
     console.log("remote peer ID ", remoteId);
@@ -151,9 +195,11 @@ function App() {
     const mediaStrm = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     console.log("******** local stream inside making call", mediaStrm);
     let call = peer.call(remoteId, mediaStrm);
+    //set callVr 
+    setCallVr(call);
 
     console.log("****make call object inside make call ", call);
-
+    setLclstream(mediaStrm)
     const localVideoElement = document.querySelector("video#localVideo")
     localVideoElement.srcObject = mediaStrm;
 
@@ -161,9 +207,22 @@ function App() {
     call.on('stream', (remoteStream) => {
       //another peer media
       console.log("*** inside makecall() the remote stream ", remoteStream);
+      setRemoteStream(remoteStream)
       const remoteVideoElement = document.querySelector("video#remoteVideo")
       remoteVideoElement.srcObject = remoteStream;
+
+      //visbile the end call button
+      setEndCallButton(true);
     })
+
+    //Emitted when either you or the remote peer closes the media connection.
+    call.on('close', () => {
+      const localVideoElement = document.querySelector("video#localVideo")
+      localVideoElement.srcObject = null;
+      const remoteVideoElement = document.querySelector("video#remoteVideo");
+      remoteVideoElement.srcObject = null;
+    })
+
   }
   //room join
   const joinRoom = () => {
@@ -171,11 +230,17 @@ function App() {
     socket.emit('roomJoin', { roomID, myId });
   }
 
+  //call end
+  const callEnd = () => {
+    peer.destroy();
+    socket.emit("callEnded", remoteId)
+  }
+
   return (
     <div className="App">
       <h1>peer</h1>
       {myId && <h1>ID : {myId}</h1>}
-      {remoteId && <h1>RemoteID : {remoteId}</h1>}
+      {remoteId && <h1>RemoteID : { }</h1>}
 
       <input type="text" id="text" />
       <button onClick={() => {
@@ -193,7 +258,7 @@ function App() {
       <button onClick={() => joinRoom()}>join room</button>
 
       <button id="callButton" style={{ display: 'none' }} onClick={() => makeCall()}>make call</button>
-
+      {endCallButton ? <button onClick={() => { callEnd() }}>End call</button> : ""}
       <h1>Local</h1>
       <video id="localVideo" autoPlay playsInline controls={true} />
       <h1>remote</h1>
