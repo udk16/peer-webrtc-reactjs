@@ -4,7 +4,8 @@ import Peer from 'peerjs';
 import { useEffect, useRef, useState } from 'react';
 import { io } from "socket.io-client";
 
-const socket = io("http://50.35.225.9:5000");
+// const socket = io("http://50.35.225.9:5000");
+const socket = io("http://50.35.225.9:5006");
 
 function App() {
 
@@ -43,25 +44,23 @@ function App() {
 
     //creating socket instance
     socket.on("connect", () => {
-      console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+      console.log(socket.id);
     });
+
 
     //getting all clientsid present in the room , we are filtering the ids
     socket.on('peersData', (data) => {
       for (const key in data) {
         if (key !== socket.id) {
           console.log("data comming from server", data[key])
-          setRemoteId(data[key].myId)
-          //makeCall()
+          setRemoteId(data[key].peerID)
         }
       }
-      //makeCall()
     })
 
     socket.on("hi", (data) => {
       console.log("data from server ", data)
     })
-
 
     //creating peer object
     console.log("peer object ", peer);
@@ -69,26 +68,14 @@ function App() {
     peer.on('open', (id) => {
       //setMyid
       setMyId(id);
-      //socket.emit('peerID', {roomID,peerID: id, clientName})
-
     })
 
     socket.on("callButton", () => {
       const buttonElement = document.querySelector("button#callButton");
       buttonElement.style.display = "inline";
     })
-
-
-    //receiving friend peerid
-    socket.on("friends", async (friends) => {
-      console.log("friends ", friends)
-      const friendPeerid = friends.friendPeerId;
-      console.log("friend peerId ===", friendPeerid)
-
-      setRemoteId(friendPeerid)
-      console.log(remoteId)
-
-    })
+//on anyone leaves thr room 
+socket.on("clientLeave",(data)=>{console.log(data," has left")})
 
     //data connection
     peer.on('connection', (rmtconn) => {
@@ -227,13 +214,15 @@ function App() {
   //room join
   const joinRoom = () => {
     //joining room with roomid and peerid
-    socket.emit('roomJoin', { roomID, myId });
+    // socket.emit('roomJoin', { roomID, peerID: myId, clientName });
+    //checking
+socket.emit("testt","hi hello")
   }
 
   //call end
   const callEnd = () => {
     peer.destroy();
-    socket.emit("callEnded", remoteId)
+    socket.emit("leave", {roomID})
   }
 
   return (
